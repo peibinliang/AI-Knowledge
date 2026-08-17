@@ -246,21 +246,14 @@ def post_markdown(webhook: str, secret: str | None, title: str, markdown: str) -
 
 
 def main() -> int:
-    webhook = (
-        os.environ.get("ENTERPRISE_DINGTALK_WEBHOOK", "").strip()
-        or os.environ.get("DINGTALK_WEBHOOK", "").strip()
-    )
-    secret = (
-        os.environ.get("ENTERPRISE_DINGTALK_SECRET", "").strip()
-        or os.environ.get("DINGTALK_SECRET", "").strip()
-        or None
-    )
+    webhook = os.environ.get("ENTERPRISE_PRODUCT_DINGTALK_WEBHOOK", "").strip()
+    secret = os.environ.get("ENTERPRISE_PRODUCT_DINGTALK_SECRET", "").strip() or None
     briefing_path = os.environ.get("BRIEFING_PATH", "").strip()
     repository = os.environ.get("GITHUB_REPOSITORY", "peibinliang/AI-Knowledge").strip()
 
     if not webhook:
         print(
-            "ENTERPRISE_DINGTALK_WEBHOOK / DINGTALK_WEBHOOK secret is not configured.",
+            "ENTERPRISE_PRODUCT_DINGTALK_WEBHOOK secret is not configured.",
             file=sys.stderr,
         )
         return 2

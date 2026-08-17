@@ -70,8 +70,6 @@ jobs:
       - name: Push enterprise product briefing to DingTalk
         env:
           BRIEFING_PATH: ${{ steps.briefing.outputs.path }}
-          ENTERPRISE_DINGTALK_WEBHOOK: ${{ secrets.ENTERPRISE_DINGTALK_WEBHOOK }}
-          ENTERPRISE_DINGTALK_SECRET: ${{ secrets.ENTERPRISE_DINGTALK_SECRET }}
-          DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
-          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
+          ENTERPRISE_PRODUCT_DINGTALK_WEBHOOK: ${{ secrets.ENTERPRISE_PRODUCT_DINGTALK_WEBHOOK }}
+          ENTERPRISE_PRODUCT_DINGTALK_SECRET: ${{ secrets.ENTERPRISE_PRODUCT_DINGTALK_SECRET }}
         run: python3 scripts/push_enterprise_products.py

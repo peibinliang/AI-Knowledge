@@ -5,7 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'enterprise-products/20??-??-??.md'
+      - 'enterprise-products/*.md'
+      - '!enterprise-products/README.md'
   workflow_dispatch:
     inputs:
       briefing_path:

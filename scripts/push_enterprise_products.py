@@ -19,9 +19,17 @@ PRODUCTS = [
     ("WorkBuddy", ["WorkBuddy", "Work Buddy"]),
     ("腾讯会议 / 腾讯文档", ["腾讯会议", "腾讯文档"]),
     ("WPS / 金山办公", ["WPS", "金山办公"]),
-    ("Microsoft 365 / Teams", ["Microsoft 365", "Microsoft Teams", "Teams"]),
-    ("Google Workspace", ["Google Workspace"]),
+    (
+        "Microsoft 365 / Teams / Copilot",
+        ["Microsoft 365", "Microsoft Teams", "Teams", "Microsoft Copilot", "Copilot"],
+    ),
+    ("Google Workspace / Meet", ["Google Workspace", "Google Meet"]),
     ("Slack", ["Slack"]),
+    ("Notion", ["Notion"]),
+    ("Zoom", ["Zoom"]),
+    ("Salesforce / Agentforce", ["Salesforce", "Agentforce"]),
+    ("ServiceNow", ["ServiceNow"]),
+    ("Atlassian / Jira / Confluence", ["Atlassian", "Jira", "Confluence"]),
 ]
 
 
@@ -48,6 +56,45 @@ def find_section(text: str, aliases: list[str]) -> str:
                 break
         collected.append(line)
     return "\n".join(collected).strip()
+
+
+def find_subsections(
+    text: str,
+    parent_aliases: list[str],
+    child_level: int = 3,
+) -> list[tuple[str, str]]:
+    """Return child headings and bodies from a structured parent section."""
+    parent = find_section(text, parent_aliases)
+    if not parent:
+        return []
+
+    results: list[tuple[str, str]] = []
+    heading = None
+    collected: list[str] = []
+
+    for line in parent.splitlines():
+        if line.startswith("#"):
+            level = len(line) - len(line.lstrip("#"))
+            if level == child_level:
+                if heading is not None:
+                    body = "\n".join(collected).strip()
+                    if body:
+                        results.append((heading, body))
+                heading = line.lstrip("#").strip()
+                collected = []
+                continue
+            if heading is not None and level < child_level:
+                break
+
+        if heading is not None:
+            collected.append(line)
+
+    if heading is not None:
+        body = "\n".join(collected).strip()
+        if body:
+            results.append((heading, body))
+
+    return results
 
 
 def compact_section(section: str, max_chars: int = 1100) -> str:
@@ -104,12 +151,26 @@ def build_markdown(path: Path, repository: str) -> str:
         parts.append("## 今日摘要\n" + summary)
 
     found = 0
-    for label, aliases in PRODUCTS:
-        section = find_section(text, aliases)
-        if not section:
-            continue
-        found += 1
-        parts.append(f"## {label}\n" + compact_section(section))
+
+    # Preferred format: parse every ### item under the structured product-dynamics section.
+    # This keeps the push script compatible with newly tracked enterprise products without
+    # requiring every product name to be added to a fixed alias list first.
+    product_items = find_subsections(
+        text,
+        ["今日重点产品动态", "重点产品动态", "产品动态"],
+    )
+    if product_items:
+        for heading, section in product_items:
+            found += 1
+            parts.append(f"## {heading}\n" + compact_section(section))
+    else:
+        # Backward compatibility for older briefings that used one product per heading.
+        for label, aliases in PRODUCTS:
+            section = find_section(text, aliases)
+            if not section:
+                continue
+            found += 1
+            parts.append(f"## {label}\n" + compact_section(section))
 
     other = find_section(text, ["其他企业产品", "其他产品", "同类产品", "其他值得关注"])
     if other:
@@ -124,8 +185,9 @@ def build_markdown(path: Path, repository: str) -> str:
 
     if found == 0 and not other:
         raise RuntimeError(
-            "No supported enterprise product sections found. Expected headings for DingTalk, "
-            "Feishu/Lark, WeCom, TRAE Work, Qwen Work, WorkBuddy, or other enterprise products."
+            "No supported enterprise product sections found. Expected a structured "
+            "'今日重点产品动态' section with ### product items, supported product headings, "
+            "or an '其他企业产品' section."
         )
 
     parts.append(f"[查看 GitHub 完整企业产品资讯]({github_url})")

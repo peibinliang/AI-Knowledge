@@ -15,8 +15,13 @@ PRODUCTS = [
     ("飞书", ["飞书", "Feishu", "Lark"]),
     ("企业微信", ["企业微信", "WeCom"]),
     ("TRAE Work", ["TRAE Work", "Trae Work"]),
-    ("千问办公", ["千问办公", "QwenWork", "Qwen Work"]),
+    ("千问办公", ["千问办公", "Qwen Work", "QwenWork"]),
     ("WorkBuddy", ["WorkBuddy", "Work Buddy"]),
+    ("腾讯会议 / 腾讯文档", ["腾讯会议", "腾讯文档"]),
+    ("WPS / 金山办公", ["WPS", "金山办公"]),
+    ("Microsoft 365 / Teams", ["Microsoft 365", "Microsoft Teams", "Teams"]),
+    ("Google Workspace", ["Google Workspace"]),
+    ("Slack", ["Slack"]),
 ]
 
 
@@ -45,7 +50,7 @@ def find_section(text: str, aliases: list[str]) -> str:
     return "\n".join(collected).strip()
 
 
-def compact_section(section: str, max_chars: int = 1400) -> str:
+def compact_section(section: str, max_chars: int = 1100) -> str:
     if not section:
         return ""
     section = re.sub(r"\n{3,}", "\n\n", section).strip()
@@ -64,19 +69,11 @@ def compact_section(section: str, max_chars: int = 1400) -> str:
     return result if result else section[:max_chars].rstrip() + "…"
 
 
-def extract_summary(text: str) -> str:
-    for aliases in (["今日摘要"], ["今日概览"], ["摘要"]):
+def find_first_section(text: str, aliases_groups: list[list[str]], max_chars: int) -> str:
+    for aliases in aliases_groups:
         section = find_section(text, aliases)
         if section:
-            return compact_section(section, 2200)
-    return ""
-
-
-def extract_actions(text: str) -> str:
-    for aliases in (["今日最值得关注"], ["今日行动"], ["行动建议"], ["持续观察"]):
-        section = find_section(text, aliases)
-        if section:
-            return compact_section(section, 1800)
+            return compact_section(section, max_chars)
     return ""
 
 
@@ -85,8 +82,24 @@ def build_markdown(path: Path, repository: str) -> str:
     date = path.stem
     github_url = f"https://github.com/{repository}/blob/main/{path.as_posix()}"
 
-    parts = [f"# 企业 AI 办公产品情报 {date}"]
-    summary = extract_summary(text)
+    summary = find_first_section(text, [["今日摘要"], ["今日概览"], ["摘要"]], 1900)
+    csm = find_first_section(
+        text,
+        [["CSM 重点关注"], ["CSM关注"], ["客户成功"], ["客户影响"]],
+        1600,
+    )
+    pm = find_first_section(
+        text,
+        [["项目经理重点关注"], ["项目经理"], ["项目影响"], ["交付影响"]],
+        1600,
+    )
+    actions = find_first_section(
+        text,
+        [["今日行动建议"], ["今日可跟进"], ["跟进建议"], ["今日最值得关注"]],
+        1600,
+    )
+
+    parts = [f"# 企业产品资讯快报 {date}"]
     if summary:
         parts.append("## 今日摘要\n" + summary)
 
@@ -98,22 +111,24 @@ def build_markdown(path: Path, repository: str) -> str:
         found += 1
         parts.append(f"## {label}\n" + compact_section(section))
 
-    # Allow an 'other enterprise products' section without forcing a fixed vendor list.
-    other = find_section(text, ["其他企业产品", "其他产品", "同类产品"])
+    other = find_section(text, ["其他企业产品", "其他产品", "同类产品", "其他值得关注"])
     if other:
-        parts.append("## 其他值得关注的企业产品\n" + compact_section(other, 1800))
+        parts.append("## 其他值得关注的企业产品\n" + compact_section(other, 1400))
 
-    actions = extract_actions(text)
+    if csm:
+        parts.append("## CSM 重点关注\n" + csm)
+    if pm:
+        parts.append("## 项目经理重点关注\n" + pm)
     if actions:
-        parts.append("## 今日最值得关注 / 行动建议\n" + actions)
+        parts.append("## 今日可跟进行动\n" + actions)
 
     if found == 0 and not other:
         raise RuntimeError(
             "No supported enterprise product sections found. Expected headings for DingTalk, "
-            "Feishu/Lark, WeCom, TRAE Work, QwenWork, WorkBuddy, or other enterprise products."
+            "Feishu/Lark, WeCom, TRAE Work, Qwen Work, WorkBuddy, or other enterprise products."
         )
 
-    parts.append(f"[查看 GitHub 完整企业产品情报]({github_url})")
+    parts.append(f"[查看 GitHub 完整企业产品资讯]({github_url})")
     return "\n\n".join(parts)
 
 
@@ -169,13 +184,23 @@ def post_markdown(webhook: str, secret: str | None, title: str, markdown: str) -
 
 
 def main() -> int:
-    webhook = os.environ.get("DINGTALK_WEBHOOK", "").strip()
-    secret = os.environ.get("DINGTALK_SECRET", "").strip() or None
+    webhook = (
+        os.environ.get("ENTERPRISE_DINGTALK_WEBHOOK", "").strip()
+        or os.environ.get("DINGTALK_WEBHOOK", "").strip()
+    )
+    secret = (
+        os.environ.get("ENTERPRISE_DINGTALK_SECRET", "").strip()
+        or os.environ.get("DINGTALK_SECRET", "").strip()
+        or None
+    )
     briefing_path = os.environ.get("BRIEFING_PATH", "").strip()
     repository = os.environ.get("GITHUB_REPOSITORY", "peibinliang/AI-Knowledge").strip()
 
     if not webhook:
-        print("DINGTALK_WEBHOOK secret is not configured.", file=sys.stderr)
+        print(
+            "ENTERPRISE_DINGTALK_WEBHOOK / DINGTALK_WEBHOOK secret is not configured.",
+            file=sys.stderr,
+        )
         return 2
     if not briefing_path:
         print("BRIEFING_PATH is empty.", file=sys.stderr)
@@ -188,7 +213,7 @@ def main() -> int:
 
     markdown = build_markdown(path, repository)
     chunks = split_markdown(markdown)
-    base_title = f"企业 AI 办公产品情报 {path.stem}"
+    base_title = f"企业产品资讯快报 {path.stem}"
 
     for index, chunk in enumerate(chunks, start=1):
         title = base_title if len(chunks) == 1 else f"{base_title} ({index}/{len(chunks)})"

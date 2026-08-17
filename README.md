@@ -23,13 +23,58 @@
 - [2026-08-13｜AI 与科技每日简报](daily/2026-08-13.md)
 - [2026-08-12｜AI 与科技每日简报](daily/2026-08-12.md)
 
+## 自动推送到钉钉
+
+仓库通过 GitHub Actions 将新增或更新的 `daily/YYYY-MM-DD.md` 自动推送到钉钉群机器人。
+
+执行链路：
+
+```text
+ChatGPT 定时任务
+    ↓
+生成并更新 daily/YYYY-MM-DD.md
+    ↓
+GitHub push 事件
+    ↓
+.github/workflows/daily-ai-briefing.yml
+    ↓
+scripts/push_dingtalk.py
+    ↓
+钉钉群机器人
+```
+
+钉钉消息不会复制完整长文，而是自动整理：**今日摘要、五大栏目重点、今日行动点、GitHub 完整简报链接**。
+
+### 必需的 GitHub Secret
+
+进入仓库：`Settings → Secrets and variables → Actions → New repository secret`，配置：
+
+- `DINGTALK_WEBHOOK`：钉钉自定义机器人完整 Webhook 地址，必填。
+- `DINGTALK_SECRET`：如果机器人开启“加签”安全设置，则填写机器人签名密钥；未开启加签可不配置。
+
+> 不要把 Webhook access token 或签名密钥提交到仓库文件中。
+
+### 手动测试
+
+配置 Secret 后，可以进入 `Actions → Push Daily Briefing to DingTalk → Run workflow`。
+
+- `briefing` 留空：自动选择 `daily/` 中日期最新的简报。
+- 或指定路径，例如 `daily/2026-08-17.md`。
+
+正常情况下，Action 会显示 `Sent DingTalk message 1/1`；若钉钉返回关键词、签名、IP 白名单或限流错误，workflow 会失败并在日志中保留钉钉返回信息。
+
 ## 目录结构
 
 ```text
 AI-Knowledge/
-├── README.md
-└── daily/
-    └── YYYY-MM-DD.md
+├── .github/
+│   └── workflows/
+│       └── daily-ai-briefing.yml
+├── scripts/
+│   └── push_dingtalk.py
+├── daily/
+│   └── YYYY-MM-DD.md
+└── README.md
 ```
 
 ## 内容原则

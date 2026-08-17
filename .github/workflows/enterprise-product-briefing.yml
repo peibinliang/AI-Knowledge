@@ -1,0 +1,76 @@
+name: Push Enterprise Product Briefing to DingTalk
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'enterprise-products/20??-??-??.md'
+  workflow_dispatch:
+    inputs:
+      briefing_path:
+        description: 'Optional briefing path, e.g. enterprise-products/2026-08-17.md. Leave empty to use the latest file.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-product-briefing-dingtalk
+  cancel-in-progress: false
+
+jobs:
+  push-enterprise-product-briefing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Resolve enterprise product briefing
+        id: briefing
+        shell: bash
+        env:
+          MANUAL_PATH: ${{ github.event.inputs.briefing_path }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${MANUAL_PATH:-}" ]; then
+            BRIEFING_PATH="$MANUAL_PATH"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            BRIEFING_PATH="$(git diff --name-only HEAD^ HEAD -- 'enterprise-products/*.md' \
+              | grep -E '^enterprise-products/[0-9]{4}-[0-9]{2}-[0-9]{2}\.md$' \
+              | sort \
+              | tail -n 1 || true)"
+          else
+            BRIEFING_PATH=""
+          fi
+
+          if [ -z "$BRIEFING_PATH" ]; then
+            BRIEFING_PATH="$(find enterprise-products -maxdepth 1 -type f \
+              -regextype posix-extended \
+              -regex '.*/[0-9]{4}-[0-9]{2}-[0-9]{2}\.md' \
+              | sort \
+              | tail -n 1 || true)"
+          fi
+
+          if [ -z "$BRIEFING_PATH" ] || [ ! -f "$BRIEFING_PATH" ]; then
+            echo "No enterprise product briefing file found." >&2
+            exit 1
+          fi
+
+          echo "path=$BRIEFING_PATH" >> "$GITHUB_OUTPUT"
+          echo "Using briefing: $BRIEFING_PATH"
+
+      - name: Push enterprise product briefing to DingTalk
+        env:
+          BRIEFING_PATH: ${{ steps.briefing.outputs.path }}
+          ENTERPRISE_DINGTALK_WEBHOOK: ${{ secrets.ENTERPRISE_DINGTALK_WEBHOOK }}
+          ENTERPRISE_DINGTALK_SECRET: ${{ secrets.ENTERPRISE_DINGTALK_SECRET }}
+          DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
+        run: python3 scripts/push_enterprise_products.py
